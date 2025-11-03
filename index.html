@@ -2,158 +2,202 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rating & Comment System</title>
+  <title>Rating & Comments Demo</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body {
-      background: linear-gradient(135deg, #ffffff, #000000);
-      color: #fff;
       min-height: 100vh;
-      padding-top: 30px;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #ffffff, #000000);
+      color: white;
     }
     .card {
       background-color: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      border-radius: 1rem;
-      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      margin-bottom: 1rem;
     }
     .star {
-      font-size: 24px;
       cursor: pointer;
-      color: gray;
-      transition: color 0.2s;
+      font-size: 1.5rem;
+      color: gold;
+      transition: transform 0.2s;
     }
-    .star:hover, .star.hover, .star.selected {
+    .star:hover {
+      transform: scale(1.3);
+    }
+    .active {
       color: gold;
     }
   </style>
 </head>
-<body class="container">
+<body class="p-4">
+  <div class="container">
+    <h1 class="text-center mb-4">🐱 Rating & Comments Demo</h1>
 
-  <h1 class="text-center mb-4">🐾 Rating & Comment System</h1>
+    <!-- Search Bar -->
+    <input type="text" id="searchInput" class="form-control mb-3" placeholder="Search topics...">
 
-  <!-- Search -->
-  <div class="input-group mb-3">
-    <input type="text" id="searchInput" class="form-control" placeholder="Search topic...">
-    <button class="btn btn-light" onclick="searchTopic()">Search</button>
+    <!-- Card Container -->
+    <div id="cardContainer" class="row row-cols-1 row-cols-md-2 g-4"></div>
+
+    <!-- Comment Section -->
+    <div id="commentSection" class="mt-5">
+      <h3 id="topicTitle"></h3>
+      <div id="averageRating" class="mb-2"></div>
+      <div id="comments"></div>
+
+      <div class="mt-3">
+        <input type="text" id="nameInput" class="form-control mb-2" placeholder="Your name">
+        <textarea id="commentInput" class="form-control mb-2" placeholder="Your comment"></textarea>
+        <div id="starRating" class="mb-2"></div>
+        <button id="submitComment" class="btn btn-primary">Submit</button>
+      </div>
+    </div>
   </div>
 
-  <!-- Card Section -->
-  <div id="cardContainer"></div>
+  <script type="module">
+    // ===================== SUPABASE SETUP =====================
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-  <script>
-    // Initialize Supabase
-    const SUPABASE_URL = 'https://kyqstizdkajrmhebxyip.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt5cXN0aXpka2Fqcm1oZWJ4eWlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIxNzcwMzcsImV4cCI6MjA3Nzc1MzAzN30.I2zP_uFsGn4Ib9Qb_Ux1mJ1kgWbeuX8_VRhF1m2GSC0'; // Paste your anon key here
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_URL = 'https://kyqstizdkajrmhebxyip.supabase.co'
+    const SUPABASE_ANON_KEY = 'YOUR-ANON-KEY-HERE' // 🔒 Replace this with your anon key
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-    // Topics (static for now)
+    // ===================== TOPICS =====================
     const topics = [
-      { title: 'Cat', desc: 'The cat, also referred to as the domestic cat or house cat, is a small carnivorous mammal often kept as a pet.' },
-      { title: 'Dog', desc: 'Dogs are domesticated mammals, not natural wild animals. They were originally bred from wolves.' },
-      { title: 'Rabbit', desc: 'Rabbits are small, furry mammals with long ears, powerful hind legs, and a short fluffy tail.' }
-    ];
+      { title: "Cat", desc: "The domestic cat is a small carnivorous mammal, loved for its companionship and hunting skills." },
+      { title: "Dog", desc: "Dogs are loyal companions known for their intelligence, playfulness, and wide variety of breeds." },
+      { title: "Bird", desc: "Birds are feathered vertebrates that lay eggs and are found in nearly every habitat on Earth." }
+    ]
 
-    // Load cards
-    async function loadCards(filter = '') {
-      const container = document.getElementById('cardContainer');
-      container.innerHTML = '';
-      const filteredTopics = topics.filter(t => t.title.toLowerCase().includes(filter.toLowerCase()));
+    // ===================== DISPLAY CARDS =====================
+    const cardContainer = document.getElementById('cardContainer')
+    const searchInput = document.getElementById('searchInput')
 
-      for (const topic of filteredTopics) {
-        const avg = await getAverageRating(topic.title);
-        const comments = await getComments(topic.title);
+    function displayCards(filter = '') {
+      cardContainer.innerHTML = ''
+      topics
+        .filter(t => t.title.toLowerCase().includes(filter.toLowerCase()))
+        .forEach(t => {
+          const col = document.createElement('div')
+          col.className = 'col'
+          col.innerHTML = `
+            <div class="card p-3">
+              <h4>${t.title}</h4>
+              <p>${t.desc}</p>
+              <button class="btn btn-outline-light viewBtn">View</button>
+            </div>
+          `
+          col.querySelector('.viewBtn').addEventListener('click', () => openTopic(t.title))
+          cardContainer.appendChild(col)
+        })
+    }
 
-        const card = document.createElement('div');
-        card.className = 'card p-3 shadow';
-        card.innerHTML = `
-          <h3>${topic.title}</h3>
-          <p>${topic.desc}</p>
-          <p><strong>⭐ Average Rating:</strong> ${avg || 'No ratings yet'}</p>
-          <div id="comments-${topic.title}" class="mb-3">
-            <h5>💬 Comments & Ratings</h5>
-            ${comments.length ? comments.map(c => `
-              <p><strong>${c.name}</strong> ⭐${c.rating}<br>${c.comment}</p>
-            `).join('') : '<p>No comments yet.</p>'}
-          </div>
+    searchInput.addEventListener('input', e => displayCards(e.target.value))
+    displayCards()
 
-          <input class="form-control mb-2" id="name-${topic.title}" placeholder="Your name">
-          <textarea class="form-control mb-2" id="comment-${topic.title}" placeholder="Your comment"></textarea>
+    // ===================== COMMENTS + RATINGS =====================
+    const topicTitle = document.getElementById('topicTitle')
+    const commentSection = document.getElementById('commentSection')
+    const commentsDiv = document.getElementById('comments')
+    const nameInput = document.getElementById('nameInput')
+    const commentInput = document.getElementById('commentInput')
+    const starRating = document.getElementById('starRating')
+    const submitComment = document.getElementById('submitComment')
+    const averageRatingDiv = document.getElementById('averageRating')
 
-          <div id="rating-${topic.title}" class="mb-2">
-            ${[1,2,3,4,5].map(i => `<span class="star" data-value="${i}">&#9733;</span>`).join('')}
-          </div>
+    let currentTopic = null
+    let selectedRating = 0
 
-          <button class="btn btn-light" onclick="submitComment('${topic.title}')">Submit</button>
-        `;
-        container.appendChild(card);
+    // ====== Create interactive stars ======
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span')
+      star.textContent = '★'
+      star.classList.add('star')
+      star.addEventListener('mouseover', () => highlightStars(i))
+      star.addEventListener('click', () => selectRating(i))
+      starRating.appendChild(star)
+    }
 
-        setupStarRating(topic.title);
+    function highlightStars(count) {
+      document.querySelectorAll('.star').forEach((s, i) => {
+        s.style.color = i < count ? 'gold' : 'gray'
+      })
+    }
+
+    function selectRating(count) {
+      selectedRating = count
+      highlightStars(count)
+    }
+
+    // ====== Load Comments ======
+    async function loadComments(topic) {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('*')
+        .eq('topic', topic)
+        .order('id', { ascending: true })
+
+      if (error) console.error('Error loading:', error)
+      displayComments(data || [])
+    }
+
+    function calculateAverage(comments) {
+      if (comments.length === 0) return 0
+      return (comments.reduce((sum, c) => sum + c.rating, 0) / comments.length).toFixed(1)
+    }
+
+    function displayComments(comments) {
+      commentsDiv.innerHTML = ''
+      if (comments.length === 0) {
+        commentsDiv.innerHTML = '<p>No comments yet.</p>'
+        averageRatingDiv.textContent = '⭐ Average Rating: No ratings yet'
+        return
       }
+
+      const avg = calculateAverage(comments)
+      averageRatingDiv.textContent = `⭐ Average Rating: ${avg}`
+
+      comments.forEach(c => {
+        const div = document.createElement('div')
+        div.classList.add('p-2', 'border', 'rounded', 'mb-2')
+        div.innerHTML = `<strong>${c.name}</strong> (${c.rating}★): ${c.comment}`
+        commentsDiv.appendChild(div)
+      })
     }
 
-    // Handle star ratings
-    function setupStarRating(topic) {
-      const stars = document.querySelectorAll(`#rating-${topic} .star`);
-      stars.forEach(star => {
-        star.addEventListener('mouseover', () => {
-          stars.forEach(s => s.classList.remove('hover'));
-          for (let i = 0; i < star.dataset.value; i++) stars[i].classList.add('hover');
-        });
-        star.addEventListener('mouseout', () => stars.forEach(s => s.classList.remove('hover')));
-        star.addEventListener('click', () => {
-          stars.forEach(s => s.classList.remove('selected'));
-          for (let i = 0; i < star.dataset.value; i++) stars[i].classList.add('selected');
-          document.getElementById(`rating-${topic}`).dataset.rating = star.dataset.value;
-        });
-      });
+    // ====== Save Comment ======
+    async function saveComment(topic, name, comment, rating) {
+      const { error } = await supabase.from('comments').insert([{ topic, name, comment, rating }])
+      if (error) console.error('Error saving:', error)
     }
 
-    // Get comments
-    async function getComments(topic) {
-      const { data, error } = await supabase.from('comments').select('*').eq('topic', topic);
-      return data || [];
-    }
-
-    // Get average rating
-    async function getAverageRating(topic) {
-      const { data, error } = await supabase.from('comments').select('rating').eq('topic', topic);
-      if (!data || data.length === 0) return null;
-      const avg = data.reduce((sum, c) => sum + c.rating, 0) / data.length;
-      return avg.toFixed(1);
-    }
-
-    // Submit comment
-    async function submitComment(topic) {
-      const name = document.getElementById(`name-${topic}`).value.trim();
-      const comment = document.getElementById(`comment-${topic}`).value.trim();
-      const rating = parseInt(document.getElementById(`rating-${topic}`).dataset.rating || '0');
-
-      if (!name || !comment || !rating) {
-        alert('Please fill all fields and select a rating.');
-        return;
+    // ====== Handle Submit ======
+    submitComment.addEventListener('click', async () => {
+      const name = nameInput.value.trim()
+      const comment = commentInput.value.trim()
+      if (!name || !comment || selectedRating === 0) {
+        alert('Please fill in all fields and select a rating!')
+        return
       }
 
-      const { error } = await supabase.from('comments').insert([{ topic, name, comment, rating }]);
-      if (error) {
-        alert('Error submitting comment!');
-        console.error(error);
-      } else {
-        alert('Comment added!');
-        loadCards(); // refresh
-      }
-    }
+      await saveComment(currentTopic, name, comment, selectedRating)
+      nameInput.value = ''
+      commentInput.value = ''
+      selectedRating = 0
+      highlightStars(0)
+      await loadComments(currentTopic)
+    })
 
-    // Search topics
-    function searchTopic() {
-      const query = document.getElementById('searchInput').value.trim();
-      loadCards(query);
+    // ====== Open Topic ======
+    async function openTopic(topic) {
+      currentTopic = topic
+      topicTitle.textContent = topic
+      await loadComments(topic)
+      commentSection.scrollIntoView({ behavior: 'smooth' })
     }
-
-    // Initial load
-    loadCards();
   </script>
 </body>
 </html>
